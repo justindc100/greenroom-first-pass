@@ -290,7 +290,7 @@ const views = {
       ${FAULTS.has('dev-sync-toast') ? `<div class="card" style="border-color:#E5484D">[Sync] Non-retryable client error for STREAK_UPDATE (400): Invalid request</div>` : ''}
       ${FAULTS.has('dev-console-text') ? `<p class="muted" style="font-family:monospace">outbox: 3 pending · lastSync=1699999999 · env=staging</p>` : ''}
       <div class="card"><div class="muted">${FAULTS.has('copy-overclaim-verified') ? 'Verified streak' : 'Streak'}</div><div style="font-size:26px;font-weight:700">${streak()} ${FAULTS.has('minor-plural') ? 'day' : 'days'} <span class="volt">▲</span></div></div>
-      <div class="card"><h2 style="margin-top:0">${FAULTS.has('minor-terminology') ? 'Next workout' : 'Next session'}</h2><div>Neck Ladder · ${todayCardMin()} min</div><button style="${FAULTS.has('drift-radius-collide') ? 'border-radius:20px' : ''}" onclick="${FAULTS.has('major-start-broken') ? '' : "startSession('neck-ladder')"}">Start session</button></div>
+      <div class="card"><h2 style="margin-top:0">${FAULTS.has('minor-terminology') ? 'Next workout' : 'Next session'}</h2><div>Neck Ladder · ${todayCardMin()} min</div><button style="${FAULTS.has('drift-radius-collide') ? 'border-radius:20px' : ''}" onclick="${FAULTS.has('major-start-broken') ? '' : "startSession('neck-ladder')"}">Begin session</button></div>
       <div class="card" style="${FAULTS.has('drift-corner-sharp') ? 'border-radius:0' : ''}"><div class="muted">${FAULTS.has('minor-doublespace') ? 'This&nbsp;&nbsp;week' : 'This week'}</div><div>${weekSessionsCount()} sessions · ${FAULTS.has('copy-dropped-count') ? '' : S.history.filter(h => inLastWeek(h.d)).reduce((a, h) => a + h.min, 0)} minutes</div></div>`;
   },
   "#/library"() {
