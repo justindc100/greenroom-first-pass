@@ -1,0 +1,24 @@
+name: Greenroom
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  greenroom:
+    permissions:
+      contents: read
+      id-token: write
+    uses: justindc100/greenroom-action/.github/workflows/pass.yml@1ea24fe4cf18c5c6c8da09eb39df903f916735aa
+    with:
+      platform: web
+      app-id: first-pass
+      prepare: |
+        npx --yes serve@14 -l 4173 -s . > serve.log 2>&1 &
+        for i in $(seq 1 30); do curl -sf http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+        curl -sf http://127.0.0.1:4173/ | head -c 200
+      target-url: http://127.0.0.1:4173/
+      artifact-path: .
+      goal: Start a session from Today, complete every step, rate it, and confirm it appears in Progress history.

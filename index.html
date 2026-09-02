@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PostureMaxx</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Barlow, system-ui, sans-serif; background: #0B0B0B; color: #F5F5F4; margin: 0; display: flex; justify-content: center; }
+  main { width: 390px; min-height: 100vh; padding: 22px 18px 90px; }
+  h1 { font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 30px; text-transform: uppercase; margin: 8px 0 12px; }
+  h2 { font-size: 17px; margin: 18px 0 8px; }
+  .volt { color: #C8FF00; }
+  p, .muted { color: #B9B9B4; font-size: 14px; line-height: 1.5; }
+  button { display: block; width: 100%; padding: 14px; margin-top: 10px; border-radius: 12px; border: none; font-family: Barlow; font-size: 15px; font-weight: 600; background: #C8FF00; color: #0B0B0B; cursor: pointer; }
+  button.ghost { background: #1C1C1A; color: #F5F5F4; }
+  .card { background: #141412; border: 1px solid #232320; border-radius: 14px; padding: 14px; margin-top: 10px; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 12px 2px; border-bottom: 1px solid #1C1C1A; font-size: 14.5px; cursor: pointer; }
+  .row .sub { color: #8A8A84; font-size: 12.5px; }
+  .chip { display: inline-block; background: #1C1C1A; border-radius: 99px; padding: 6px 13px; font-size: 12.5px; margin: 4px 6px 0 0; cursor: pointer; }
+  .chip.sel { background: #C8FF00; color: #0B0B0B; }
+  input[type=text], input[type=search], select { width: 100%; padding: 11px; margin-top: 6px; border-radius: 9px; border: 1px solid #2E2E2A; background: #141412; color: #F5F5F4; font-size: 14px; }
+  .toggle { width: 46px; height: 26px; border-radius: 99px; background: #2E2E2A; position: relative; cursor: pointer; flex-shrink: 0; }
+  .toggle.on { background: #C8FF00; }
+  .toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #F5F5F4; transition: left .1s; }
+  .toggle.on::after { left: 23px; background: #0B0B0B; }
+  nav.tabs { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 390px; display: flex; background: #141412; border-top: 1px solid #232320; }
+  nav.tabs a { flex: 1; text-align: center; padding: 14px 0 18px; color: #8A8A84; text-decoration: none; font-size: 13px; font-weight: 600; position: relative; }
+  nav.tabs a.active { color: #C8FF00; }
+  .badge { position: absolute; top: 8px; right: 22%; background: #FF5545; color: white; font-size: 10px; border-radius: 99px; padding: 1px 6px; }
+  .spinner { width: 26px; height: 26px; border: 3px solid #2E2E2A; border-top-color: #C8FF00; border-radius: 50%; animation: spin 1s linear infinite; margin: 14px auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .clamp { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; display: inline-block; vertical-align: bottom; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<nav class="tabs" id="tabnav"></nav>
+<script>
+const FAULTS = new Set([
+  ...(window.__GREENROOM_SCENARIO__?.faults ?? []),
+  ...(new URLSearchParams(location.search).get("faults") ?? "").split(",").filter(Boolean),
+]);
+// Identity injection is harness-side only (adapter setScenario/setIdentity
+// seeding window.__GREENROOM_SCENARIO__ before the first script runs) -- see
+// DESIGN.md "Identity, authorization, and roles". There is deliberately no
+// ?session= URL mechanism: a query param would be model-visible and leak
+// which role a pass is testing. IDENTITY_CONTROL distinguishes "no identity
+// key at all" (every pre-existing eval/case: preserve the original
+// always-solo-user behavior below, unchanged) from "identity key present,
+// even with role:null" (this harness's authz cases: honor it, including an
+// explicit logged-out start).
+const IDENTITY_CONTROL = Object.prototype.hasOwnProperty.call(window.__GREENROOM_SCENARIO__ ?? {}, "identity");
+const SEED_IDENTITY = window.__GREENROOM_SCENARIO__?.identity ?? null;
+const EX = [
+  { id: "neck-ladder", name: "Neck Ladder", cat: "Neck", min: 3, level: "Easy", blurb: "Slow half-circles that unwind meeting posture.", goal: "ease neck tension" },
+  { id: "wall-angels", name: "Wall Angels", cat: "Shoulders", min: 4, level: "Medium", blurb: "Slides against the wall to open the shoulder line.", goal: "open the shoulder line" },
+  { id: "thoracic-opener", name: "Thoracic Opener", cat: "Back", min: 5, level: "Medium", blurb: "Gentle extension over the chair back.", goal: "loosen the upper back" },
+  { id: "chin-tucks", name: "Chin Tucks", cat: "Neck", min: 2, level: "Easy", blurb: "The classic reset for forward head drift.", goal: "correct forward head" },
+  { id: "scap-squeeze", name: "Scapular Squeeze With Long Hold", cat: "Shoulders", min: 3, level: "Easy", blurb: "Squeeze, hold, breathe, release.", goal: "steady the shoulder blades" },
+  { id: "hip-hinge", name: "Standing Hip Hinge", cat: "Back", min: 4, level: "Hard", blurb: "Hinge practice to spare the lower back.", goal: "protect the lower back" },
+  { id: "wrist-waves", name: "Wrist Waves", cat: "Wrists", min: 2, level: "Easy", blurb: "Circles and waves for keyboard wrists.", goal: "loosen keyboard wrists" },
+  { id: "doorway-stretch", name: "Doorway Pec Stretch", cat: "Shoulders", min: 3, level: "Medium", blurb: "Open the chest without shrugging.", goal: "open the chest" },
+];
+// Deterministic seeded identities for the role/authz coverage dimension
+// (DESIGN.md "Identity, authorization, and roles"): one disposable test
+// account per role, with distinct per-identity data so cross-identity bleed
+// is observable rather than coincidental. Passwords are throwaway fixture
+// values, never real credentials.
+const ACCOUNTS = {
+  "alex@posturemaxx.test": { password: "greenroom-test-1", role: "user", accountId: "user-alex", displayName: "Alex" },
+  "morgan@posturemaxx.test": { password: "greenroom-test-2", role: "trainer", accountId: "trainer-morgan", displayName: "Morgan" },
+  "riley@posturemaxx.test": { password: "greenroom-test-3", role: "admin", accountId: "admin-riley", displayName: "Riley" },
+};
+// Trainer Morgan's client roster -- deliberately distinct data per client so
+// a detail view that leaks another client's data is observable.
+const CLIENTS = [
+  { id: "cli-priya", name: "Priya Shah", nextExercise: "Wall Angels", streak: 6, sessions: 18 },
+  { id: "cli-devon", name: "Devon Cole", nextExercise: "Chin Tucks", streak: 2, sessions: 5 },
+];
+// Admin Riley's member-management roster -- same distinct-data shape as
+// CLIENTS, for the admin-side mirror of cross-member-data-bleed.
+const MEMBERS = [
+  { id: "mem-jordan", name: "Jordan Lee", plan: "Pro", sessions: 42, lastActive: "2026-08-20" },
+  { id: "mem-sam", name: "Sam Ortiz", plan: "Basic", sessions: 9, lastActive: "2026-08-14" },
+];
+const S = {
+  route: "#/today",
+  units: localStorage.getItem("units") ?? "cm",
+  reminders: (localStorage.getItem("reminders") ?? "on") === "on",
+  reminderTime: localStorage.getItem("reminderTime") ?? "9:30 AM",
+  notif: { streak: true, weekly: false, tips: true },
+  history: [
+    { d: daysAgo(0), name: "Neck Ladder", min: 3, rating: 5 },
+    { d: daysAgo(1), name: "Wall Angels", min: 4, rating: 4 },
+    { d: daysAgo(4), name: "Chin Tucks", min: 2, rating: 3 },
+    { d: daysAgo(6), name: "Thoracic Opener", min: 5, rating: 4 },
+    { d: daysAgo(8), name: "Neck Ladder", min: 3, rating: 5 },
+    { d: daysAgo(9), name: "Wrist Waves", min: 2, rating: 4 },
+    { d: daysAgo(11), name: "Wall Angels", min: 4, rating: 5 },
+  ],
+  session: null,
+  lastCompleted: null,
+  search: "",
+  filter: "All",
+  profileName: "Alex",
+};
+function daysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
+const streak = () => (FAULTS.has("deep-streak-math") ? 5 : 2);
+const fmtLen = (min) => {
+  // deep-units: detail pages ignore the units setting and mix in inches
+  if (FAULTS.has("deep-units")) return `${min} min · reach 12 in`;
+  return `${min} min · reach ${S.units === "cm" ? "30 cm" : "12 in"}`;
+};
+// inLastWeek/progressHist: shared source of truth for "this week" cross-screen
+// checks (deep-week-totals-mismatch, deep-date verification twins) so Today
+// and Progress compute the same window unless a fault deliberately diverges.
+function inLastWeek(d) { return d >= daysAgo(7) && d <= daysAgo(0); }
+function progressHist() {
+  let hist = [...S.history].map((h, i) => (FAULTS.has("minor-dateformat") && i === 0 ? { ...h, d: "08/24/2026" } : h));
+  if (FAULTS.has("minor-sort")) { const t = hist[0]; hist[0] = hist[3]; hist[3] = t; }
+  if (FAULTS.has("deep-date")) hist[2] = { ...hist[2], d: "2027-01-03" };
+  return hist;
+}
+// deep-duration-mismatch: Today's session card states its own duration
+// independent of the exercise's canonical EX.min, so it can drift from the
+// number the Exercise detail page shows for the same exercise (lib-140).
+const todayCardMin = () => (FAULTS.has("deep-duration-mismatch") ? 6 : EX.find((e) => e.id === "neck-ladder").min);
+// deep-week-totals-mismatch: Today's weekly session count can go stale/stuck
+// at zero while Progress's Totals card keeps computing the real number from
+// S.history (lib-106, lib-119).
+// deep-week-count-frozen: the same counter is instead computed once on first
+// render and memoized, so a session completed during THIS visit shows up in
+// Progress's live "This week" line and History but never in Today's card --
+// stale derived state that is invisible until a committed session journey
+// has actually mutated S.history (the two twins render identically at load).
+let weekCountAtLoad = null;
+const weekSessionsCount = () => {
+  if (FAULTS.has("deep-week-totals-mismatch")) return 0;
+  const live = S.history.filter((h) => inLastWeek(h.d)).length;
+  if (!FAULTS.has("deep-week-count-frozen")) return live;
+  if (weekCountAtLoad === null) weekCountAtLoad = live;
+  return weekCountAtLoad;
+};
+// deep-achievement-pct: the displayed percentage is stored independently of
+// the count it is supposed to describe (lib-138).
+const monthlyGoal = () => { const done = 5, total = 10; return { done, total, pct: FAULTS.has("deep-achievement-pct") ? 44 : Math.round((done / total) * 100) }; };
+
+// --- Identity / role session -------------------------------------------
+// SESSION is the live, in-memory source of truth for who is signed in.
+// authedOnce / cachedGrants exist to make the two session-integrity fault
+// classes below real bugs rather than eval-only toggles: each is a plausible
+// implementation mistake (a guard that memoizes instead of re-deriving) with
+// an honest clean counterpart that re-derives every time.
+let SESSION = null;
+let authedOnce = false;
+let cachedGrants = null;
+let lastOpenedClientId = null;
+let lastOpenedMemberId = null;
+let bleedObserved = false;
+let LOGIN_ERROR = null;
+
+function accountFor(role) { return Object.values(ACCOUNTS).find((a) => a.role === role) ?? null; }
+function computeGrants(role) { return { role, canViewMembers: role === "admin", canViewClients: role === "trainer" || role === "admin" }; }
+// privilege-escalation-after-switch: the clean guard always re-derives grants
+// from the live SESSION.role; the faulty guard instead reads a grants object
+// that was cached at login and never recomputed by switchIdentity(), so a
+// switch from an admin test identity down to user retains admin capability.
+function currentGrants() {
+  if (FAULTS.has("privilege-escalation-after-switch") && cachedGrants) return cachedGrants;
+  return computeGrants(SESSION?.role ?? null);
+}
+// role-leak: the admin member-management screen must only ever be reachable
+// by an admin identity. The fault bypasses that check entirely regardless of
+// the signed-in role's actual grants.
+function canViewMembers() { return FAULTS.has("role-leak") ? true : currentGrants().canViewMembers; }
+function canViewClients() { return currentGrants().canViewClients; }
+// stale-session-after-logout: the clean guard checks the live SESSION; the
+// faulty guard checks a flag that logout() forgets to clear, so a screen
+// reached by tapping/navigating back after logout is still treated as
+// authenticated even though SESSION itself is gone.
+function isAuthed() { return FAULTS.has("stale-session-after-logout") ? authedOnce : Boolean(SESSION); }
+function homeRouteFor(role) { return role === "admin" ? "#/admin/members" : role === "trainer" ? "#/clients" : "#/today"; }
+function loginAs(role) {
+  const account = accountFor(role);
+  SESSION = { role, accountId: account.accountId, displayName: account.displayName };
+  authedOnce = true;
+  cachedGrants = computeGrants(role);
+  localStorage.setItem("session", JSON.stringify(SESSION));
+}
+function attemptLogin() {
+  const email = document.getElementById("login-email").value.trim().toLowerCase();
+  const password = document.getElementById("login-password").value;
+  const account = ACCOUNTS[email];
+  if (!account || account.password !== password) { LOGIN_ERROR = "Invalid email or password."; render(); return; }
+  LOGIN_ERROR = null;
+  loginAs(account.role);
+  location.hash = homeRouteFor(account.role);
+}
+function switchIdentity(role) {
+  const account = accountFor(role);
+  SESSION = { role, accountId: account.accountId, displayName: account.displayName };
+  authedOnce = true;
+  if (!FAULTS.has("privilege-escalation-after-switch")) cachedGrants = computeGrants(role);
+  localStorage.setItem("session", JSON.stringify(SESSION));
+  location.hash = homeRouteFor(role);
+}
+function logout() {
+  // Grading marker only (never rendered, never shown to the driver): the
+  // stale-session oracles must prove logout was actually exercised, not
+  // just that the session state happens to match the expected verdict.
+  window.__greenroomLogoutCount = (window.__greenroomLogoutCount ?? 0) + 1;
+  SESSION = null;
+  if (!FAULTS.has("stale-session-after-logout")) { authedOnce = false; cachedGrants = null; }
+  localStorage.removeItem("session");
+  location.hash = "#/login";
+}
+if (IDENTITY_CONTROL) {
+  if (SEED_IDENTITY && SEED_IDENTITY.role) loginAs(SEED_IDENTITY.role);
+  // else: identity explicitly requested with no role (or role: null) -- stay
+  // logged out so the login screen is the entry point.
+} else {
+  // Legacy path: no identity control requested at all (every pre-existing
+  // eval/case). Preserve the original always-signed-in-as-the-solo-user
+  // behavior exactly, so nothing outside this feature changes.
+  loginAs("user");
+}
+
+function notAuthorizedView(label, oracleTag) {
+  return `<div data-oracle="${oracleTag}"><h1>Not authorized</h1><p class="muted">You don't have access to ${label}.</p><button class="ghost" onclick="location.hash=homeRouteFor(SESSION.role)">Back</button></div>`;
+}
+function clientsListView() {
+  return `<div data-oracle="clients-list"><h1>Clients</h1>
+    <p class="muted">${FAULTS.has('role-wrong-content') ? 'Turn Session reminders off, then check Progress for your streak.' : "Tap a client to review their session history and streak."}</p>
+    ${CLIENTS.map((c) => `<div class="row" onclick="location.hash='#/clients/${c.id}'"><span>${c.name}</span> <span class="sub">${c.streak} day streak ›</span></div>`).join("")}</div>`;
+}
+function clientDetailView(id) {
+  if (!canViewClients()) return notAuthorizedView("clients", "clients-blocked");
+  const found = CLIENTS.find((c) => c.id === id) ?? CLIENTS[0];
+  // cross-member-data-bleed: the detail view's stat cards are sourced from a
+  // "last opened" cache that is never reset when navigating to a *different*
+  // client's detail screen, so the heading (id-derived, correct) disagrees
+  // with the stats (stale, belong to whichever client was opened previously)
+  // -- the same shape as the real cross-member-bleed defect class this
+  // fixture is modeling.
+  let source = found;
+  if (FAULTS.has("cross-member-data-bleed") && lastOpenedClientId && lastOpenedClientId !== found.id) {
+    source = CLIENTS.find((c) => c.id === lastOpenedClientId);
+    bleedObserved = true;
+  }
+  lastOpenedClientId = found.id;
+  return `<div data-oracle="client-detail"><h1>${found.name}</h1>
+    <div class="card"><div class="muted">Next session</div><div>${source.nextExercise}</div></div>
+    <div class="card"><div class="muted">Streak</div><div>${source.streak} days</div></div>
+    <div class="card"><div class="muted">Total sessions</div><div>${source.sessions}</div></div>
+    <button class="ghost" onclick="location.hash='#/clients'">Back to clients</button></div>`;
+}
+function membersListView() {
+  return `<div data-oracle="admin-members-list"><h1>Members</h1>
+    <p class="muted">All accounts across the workspace.</p>
+    ${MEMBERS.map((m) => `<div class="row" onclick="location.hash='#/admin/members/${m.id}'"><span>${m.name}</span> <span class="sub">${m.plan} ›</span></div>`).join("")}</div>`;
+}
+function memberDetailView(id) {
+  if (!canViewMembers()) return notAuthorizedView("member management", "admin-members-blocked");
+  const found = MEMBERS.find((m) => m.id === id) ?? MEMBERS[0];
+  let source = found;
+  if (FAULTS.has("cross-member-data-bleed") && lastOpenedMemberId && lastOpenedMemberId !== found.id) {
+    source = MEMBERS.find((m) => m.id === lastOpenedMemberId);
+    bleedObserved = true;
+  }
+  lastOpenedMemberId = found.id;
+  return `<div data-oracle="member-detail"><h1>${found.name}</h1>
+    <div class="card"><div class="muted">Plan</div><div>${source.plan}</div></div>
+    <div class="card"><div class="muted">Sessions logged</div><div>${source.sessions}</div></div>
+    <div class="card"><div class="muted">Last active</div><div>${source.lastActive}</div></div>
+    <button class="ghost" onclick="location.hash='#/admin/members'">Back to members</button></div>`;
+}
+
+const views = {
+  "#/login"() {
+    return `<h1>Log in</h1>
+      <label class="muted" for="login-email">Email</label><input type="text" id="login-email" placeholder="you@posturemaxx.test">
+      <label class="muted" for="login-password" style="display:block;margin-top:12px">Password</label><input type="password" id="login-password" placeholder="Password">
+      <button onclick="attemptLogin()">Log in</button>
+      ${LOGIN_ERROR ? `<p class="muted" style="color:#FF3B30">${LOGIN_ERROR}</p>` : ""}`;
+  },
+  "#/today"() {
+    return `<h1>${FAULTS.has('minor-caps') ? 'today' : 'Today'}</h1>
+      ${FAULTS.has('dev-sync-toast') ? `<div class="card" style="border-color:#E5484D">[Sync] Non-retryable client error for STREAK_UPDATE (400): Invalid request</div>` : ''}
+      ${FAULTS.has('dev-console-text') ? `<p class="muted" style="font-family:monospace">outbox: 3 pending · lastSync=1699999999 · env=staging</p>` : ''}
+      <div class="card"><div class="muted">${FAULTS.has('copy-overclaim-verified') ? 'Verified streak' : 'Streak'}</div><div style="font-size:26px;font-weight:700">${streak()} ${FAULTS.has('minor-plural') ? 'day' : 'days'} <span class="volt">▲</span></div></div>
+      <div class="card"><h2 style="margin-top:0">${FAULTS.has('minor-terminology') ? 'Next workout' : 'Next session'}</h2><div>Neck Ladder · ${todayCardMin()} min</div><button style="${FAULTS.has('drift-radius-collide') ? 'border-radius:20px' : ''}" onclick="${FAULTS.has('major-start-broken') ? '' : "startSession('neck-ladder')"}">Start session</button></div>
+      <div class="card" style="${FAULTS.has('drift-corner-sharp') ? 'border-radius:0' : ''}"><div class="muted">${FAULTS.has('minor-doublespace') ? 'This&nbsp;&nbsp;week' : 'This week'}</div><div>${weekSessionsCount()} sessions · ${FAULTS.has('copy-dropped-count') ? '' : S.history.filter(h => inLastWeek(h.d)).reduce((a, h) => a + h.min, 0)} minutes</div></div>`;
+  },
+  "#/library"() {
+    let list = EX.filter((e) => (S.filter === "All" || e.cat === S.filter) && e.name.toLowerCase().includes(S.search.toLowerCase()));
+    if (FAULTS.has("deep-filter-broken") && S.filter === "Neck") list = [...list, EX.find((e) => e.id === "hip-hinge")];
+    return `<h1>${FAULTS.has('minor-typo') ? 'Excercises' : 'Library'} <span class="muted" style="font-size:12px;text-transform:none">${FAULTS.has('drift-loading-variant') ? 'Loading…' : 'Updated just now'}</span></h1>
+      <input type="search" placeholder="Search exercises" value="${S.search}" oninput="S.search=this.value;render()">
+      <div>${["All", "Neck", "Shoulders", "Back", "Wrists"].map((c) => `<span class="chip ${S.filter === c ? "sel" : ""}" style="${FAULTS.has('drift-pill-shape') && S.filter === c ? 'border-radius:6px' : ''}${FAULTS.has('drift-button-height') && c === 'Shoulders' ? 'padding:10px 13px' : ''}" onclick="S.filter='${c}';render()">${c}</span>`).join("")}</div>
+      ${list.map((e) => {
+        const truncate = FAULTS.has("deep-trunc") && e.id === "scap-squeeze";
+        return `<div class="row" onclick="location.hash='#/exercise/${e.id}'"><span class="${truncate ? "clamp" : ""}">${e.name}</span><span class="sub">${e.cat} · ${e.min} ${FAULTS.has('minor-mins') && e.id === 'chin-tucks' ? 'mins' : 'min'}</span></div>`;
+      }).join("")}
+      <h2>Recently viewed</h2>${FAULTS.has('drift-empty-state') ? `<p style="padding:4px;font-size:16px">Nothing yet.</p>` : `<p class="muted" style="text-align:center;padding:24px 0">Nothing yet — exercises you open will show up here.</p>`}`;
+  },
+  "#/progress"() {
+    const g = monthlyGoal();
+    const ach = FAULTS.has("deep-spinner")
+      ? `<div class="spinner"></div><p class="muted" style="text-align:center">Loading achievements…</p>`
+      : `<div class="row"><span>Monthly goal</span><span class="sub">${g.done} of ${g.total} sessions · ${g.pct}%</span></div><div class="row"><span>First week done</span><span class="volt" style="${FAULTS.has('drift-icon-weight') ? 'font-size:22px;font-weight:900' : ''}">✓</span></div><div class="row"><span>Five neck resets</span><span class="volt">✓</span></div>`;
+    const hist = progressHist();
+    return `<h1 style="${FAULTS.has('drift-heading-scale') ? 'font-size:22px' : ''}">Progress</h1>
+      ${FAULTS.has('dev-redbox-overlay') ? `<div style="background:#FF3B30;color:#fff;font-family:monospace;padding:16px;border-radius:0;margin-bottom:10px">Invariant Violation: Text strings must be rendered within a &lt;Text&gt; component.<br>&nbsp;&nbsp;at ProgressScreen<br>&nbsp;&nbsp;at RCTView</div>` : ''}
+      <div class="card"><div class="muted">Totals</div><div>${hist.length} sessions · ${hist.reduce((a, h) => a + h.min, 0)} minutes · streak ${streak()} days</div><div class="muted" style="margin-top:6px">This week: ${S.history.filter(h => inLastWeek(h.d)).length} sessions</div></div>
+      <div class="card"><div class="muted">Streak</div><div style="font-size:${FAULTS.has('drift-stat-size') ? 20 : 26}px;font-weight:700">${streak()} days</div></div>
+      <h2>History</h2>
+      ${FAULTS.has('major-history-wipe') ? `<p class="muted">No sessions yet.</p>` : hist.map((h) => `<div class="row"><span>${h.name}</span><span class="sub">${h.d} · ${h.min} min · ${"★".repeat(h.rating)}</span></div>`).join("")}
+      <h2>Achievements</h2>${ach}`;
+  },
+  "#/settings"() {
+    return `<h1>Settings</h1>
+      <div class="row" onclick="location.hash='#/settings/profile'"><span>Profile</span><span class="sub">${S.profileName} ›</span></div>
+      <div class="row" onclick="location.hash='#/settings/reminders'"><span>Reminders</span><span class="sub">${FAULTS.has('dev-sync-button-label') ? '[Sync] Retry ›' : (S.reminders ? S.reminderTime : "Off") + " ›"}</span></div>
+      <div class="row" onclick="location.hash='#/settings/notifications'"><span>Notifications</span><span class="sub">›</span></div>
+      <div class="row" onclick="${FAULTS.has("deep-dead-row") ? "" : "location.hash='#/settings/subscription'"}"><span>Manage subscription</span><span class="sub">›</span></div>
+      <div class="row" onclick="location.hash='#/settings/about'"><span>About</span><span class="sub">${FAULTS.has('minor-version-mismatch') ? 'v2.3.0 ›' : '›'}</span></div>
+      ${FAULTS.has('dev-todo-copy') ? `<div class="row" style="cursor:default"><span>[DEBUG] Reset onboarding</span><span class="sub">TODO remove before release</span></div>` : ''}
+      ${IDENTITY_CONTROL ? `
+      <h2>Test identity</h2>
+      <div class="row" style="cursor:default"><span>Signed in as</span><span class="sub">${SESSION?.displayName ?? "—"} (${SESSION?.role ?? "—"})</span></div>
+      <div class="row" onclick="logout()"><span>Log out</span><span class="sub">›</span></div>
+      <div class="row" onclick="switchIdentity('user')"><span>Switch to user test identity</span><span class="sub">›</span></div>
+      <div class="row" onclick="switchIdentity('trainer')"><span>Switch to trainer test identity</span><span class="sub">›</span></div>
+      <div class="row" onclick="switchIdentity('admin')"><span>Switch to admin test identity</span><span class="sub">›</span></div>` : ""}`;
+  },
+  "#/settings/profile"() {
+    return `<h1>Profile</h1>
+      <label class="muted" for="pname">Name</label><input type="text" id="pname" value="${S.profileName}" onchange="S.profileName=this.value">
+      <label class="muted" for="units" style="display:block;margin-top:12px">Measurement units</label>
+      <select id="units" onchange="setUnits(this.value)"><option value="cm" ${S.units === "cm" ? "selected" : ""}>Centimeters</option><option value="in" ${S.units === "in" ? "selected" : ""}>Inches</option></select>
+      <button class="ghost" onclick="location.hash='#/settings'">Back to settings</button>`;
+  },
+  "#/settings/reminders"() {
+    return `<h1>Reminders</h1>
+      <div class="row" style="cursor:default"><span>Session reminders</span><div class="toggle ${S.reminders ? "on" : ""}" role="switch" aria-checked="${S.reminders}" aria-label="Session reminders" onclick="toggleReminders()"></div></div>
+      <div class="row" onclick="cycleTime()"><span>Reminder time</span><span class="sub">${S.reminderTime} ›</span></div>
+      <button class="ghost" onclick="location.hash='#/settings'">Back to settings</button>`;
+  },
+  "#/settings/notifications"() {
+    return `<h1>Notifications</h1>
+      ${["streak", "weekly", "tips"].map((k) => `<div class="row" style="cursor:default"><span>${{ streak: "Streak alerts", weekly: "Weekly summary", tips: "Posture tips" }[k]}</span><div class="toggle ${S.notif[k] ? "on" : ""}" role="switch" aria-checked="${S.notif[k]}" aria-label="${{ streak: "Streak alerts", weekly: "Weekly summary", tips: "Posture tips" }[k]}" onclick="toggleNotif('${k}')"></div></div>`).join("")}
+      <button class="ghost" onclick="location.hash='#/settings'">Back to settings</button>`;
+  },
+  "#/settings/subscription"() {
+    return `<h1>Subscription</h1>${FAULTS.has('copy-promise-mismatch') ? `<div class="card" style="background:#C8FF00;color:#0B0B0B;font-weight:700">Try free for 3 days</div>` : ''}<div class="card"><div>Annual · renews next spring</div><div class="muted">Managed through the App Store on a device.</div></div><button style="${FAULTS.has('drift-off-palette') ? 'background:#3B82F6;color:#fff' : ''}">Manage payment method</button><button class="ghost" onclick="location.hash='#/settings'">Back to settings</button>`;
+  },
+  "#/settings/about"() {
+    return `<h1>About</h1><div class="row" style="cursor:default"><span>Version</span><span class="sub">2.4.1 (built 418)</span></div><div class="row" style="cursor:default"><span>Terms of service</span><span class="sub">›</span></div>${FAULTS.has('minor-year') ? '<p class="muted" style="margin-top:14px">© 2024 PostureMaxx</p>' : ''}<button class="ghost" onclick="location.hash='#/settings'">Back to settings</button>`;
+  },
+};
+
+function exerciseView(id) {
+  const e = EX.find((x) => x.id === id);
+  const lead = FAULTS.has('copy-lowercase-start') ? `${e.cat.toLowerCase()} moves like this one build up gradually.` : `${e.cat} moves like this one build up gradually.`;
+  const goalLine = FAULTS.has('copy-ungrammatical-goal') ? `Six focused moves, in order, for ${e.goal}.` : `Built to help you ${e.goal}.`;
+  return `<h1>${e.name}</h1><p>${e.blurb}</p>
+    <p class="muted">${FAULTS.has('copy-question-framing') ? 'QUESTION 1 OF 3 — BASELINE BUILDING' : '3 quick steps.'}</p>
+    <div class="card"><div class="muted">Details</div><div>${fmtLen(e.min)} · ${e.level} · ${e.cat}</div></div>
+    <p class="muted">${lead}</p>
+    <p class="muted">${goalLine}</p>
+    <button onclick="startSession('${e.id}')">Start this exercise</button>
+    <button class="${FAULTS.has('drift-button-hierarchy') ? '' : 'ghost'}" onclick="location.hash='#/library'">Back to library</button>`;
+}
+function sessionView() {
+  const s = S.session;
+  if (s.step < 3) {
+    return `<h1>${s.ex.name}</h1><p class="muted">Step ${s.step + 1} of 3</p>
+      <div class="card"><div>${["Settle into position and breathe out.", "Move slowly through the range. No forcing.", "Last round. Slower than feels natural."][s.step]}</div></div>
+      <button onclick="S.session.step++;render()">Next</button>
+      <button class="ghost" onclick="S.session=null;location.hash='#/today'">End early</button>`;
+  }
+  return `<h1>How did it feel?</h1>
+    <div role="group" aria-label="Session rating">${[1, 2, 3, 4, 5].map((n) => `<button class="chip ${s.rating === n ? "sel" : ""}" aria-label="${n} star rating" aria-pressed="${s.rating === n}" onclick="S.session.rating=${n};render()">${n}</button>`).join("")}</div>
+    <button onclick="finishSession()">Finish session</button>`;
+}
+function startSession(id) { S.session = { ex: EX.find((e) => e.id === id), step: 0, rating: null }; location.hash = "#/session"; }
+function finishSession() {
+  if (!S.session.rating) return;
+  const completed = { d: daysAgo(0), name: S.session.ex.name, min: S.session.ex.min, rating: S.session.rating };
+  S.lastCompleted = completed;
+  if (!FAULTS.has("deep-rating-lost")) {
+    S.history.unshift(completed);
+  }
+  S.session = null;
+  location.hash = "#/progress";
+}
+function setUnits(v) { S.units = v; localStorage.setItem("units", v); render(); }
+function toggleReminders() {
+  S.reminders = !S.reminders;
+  if (!FAULTS.has("deep-persist")) localStorage.setItem("reminders", S.reminders ? "on" : "off");
+  render();
+}
+function toggleNotif(k) { S.notif[k] = !S.notif[k]; render(); }
+function cycleTime() { S.reminderTime = S.reminderTime === "9:30 AM" ? "12:30 PM" : "9:30 AM"; localStorage.setItem("reminderTime", S.reminderTime); render(); }
+
+// role-wrong-content lives on clientsListView (defined above); nav items are
+// role-scoped so an unauthorized identity has no tappable path into a
+// forbidden surface in the clean case, while role-leak specifically re-adds
+// a Members tab for a non-admin identity, making the leak both discoverable
+// and reachable through ordinary navigation -- not just a hidden route.
+function navItemsFor(role) {
+  const items = role === "admin"
+    ? [["#/admin/members", "tab-members", "Members"]]
+    : role === "trainer"
+      ? [["#/clients", "tab-clients", "Clients"]]
+      : [["#/today", "tab-today", "Today"], ["#/library", "tab-library", "Library"], ["#/progress", "tab-progress", "Progress"]];
+  const withSettings = [...items, ["#/settings", "tab-settings", "Settings"]];
+  if (role !== "admin" && FAULTS.has("role-leak")) withSettings.splice(withSettings.length - 1, 0, ["#/admin/members", "tab-members", "Members"]);
+  return withSettings;
+}
+function renderNav() {
+  const role = currentGrants().role;
+  const items = navItemsFor(role);
+  document.getElementById("tabnav").innerHTML = items.map(([href, id, label]) =>
+    `<a href="${href}" id="${id}">${label}${id === "tab-library" ? `<span id="lib-badge" class="badge ${FAULTS.has("deep-badge") ? "" : "hidden"}">3</span>` : ""}</a>`
+  ).join("");
+  for (const [href, id] of items) document.getElementById(id).classList.toggle("active", location.hash.startsWith(href));
+}
+
+function render() {
+  if (!isAuthed()) {
+    if (location.hash !== "#/login") { location.hash = "#/login"; return; }
+  } else if (location.hash === "#/login" || !location.hash) {
+    location.hash = homeRouteFor(SESSION.role);
+    return;
+  }
+  // deep-persist: state resets to defaults when re-entering the reminders screen
+  if (FAULTS.has("deep-persist") && location.hash === "#/settings/reminders" && S._lastRoute !== "#/settings/reminders") {
+    S.reminders = true;
+  }
+  S._lastRoute = location.hash;
+  const ex = location.hash.match(/^#\/exercise\/(.+)$/);
+  const cli = location.hash.match(/^#\/clients\/(.+)$/);
+  const mem = location.hash.match(/^#\/admin\/members\/(.+)$/);
+  let view;
+  if (location.hash === "#/login") view = views["#/login"]();
+  else if (location.hash === "#/session" && S.session) view = sessionView();
+  else if (ex) view = exerciseView(ex[1]);
+  else if (cli) view = clientDetailView(cli[1]);
+  else if (mem) view = memberDetailView(mem[1]);
+  else if (location.hash === "#/clients") view = canViewClients() ? clientsListView() : notAuthorizedView("clients", "clients-blocked");
+  else if (location.hash === "#/admin/members") view = canViewMembers() ? membersListView() : notAuthorizedView("member management", "admin-members-blocked");
+  else view = (views[location.hash] ?? views["#/today"])();
+  document.getElementById("app").innerHTML = view;
+  if (location.hash === "#/login") document.getElementById("tabnav").innerHTML = "";
+  else renderNav();
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", render);
+if (!location.hash) location.hash = isAuthed() ? homeRouteFor(SESSION.role) : "#/login";
+render();
+</script>
+</body>
+</html>
