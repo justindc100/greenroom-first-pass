@@ -18,7 +18,6 @@ jobs:
       prepare: |
         npx --yes serve@14 -l 4173 -s . > serve.log 2>&1 &
         for i in $(seq 1 30); do curl -sf http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
-        curl -sf http://127.0.0.1:4173/ | head -c 200
       target-url: http://127.0.0.1:4173/
       artifact-path: .
       goal: Start a session from Today, complete every step, rate it, and confirm it appears in Progress history.
