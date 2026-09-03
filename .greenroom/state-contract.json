@@ -1,6 +1,14 @@
 {
   "schemaVersion": "1.0",
   "entryState": "s01-today",
+  "routerKind": "hash-spa",
+  "graphPaths": [
+    "index.html"
+  ],
+  "sharedSources": [
+    ".greenroom/**",
+    ".github/**"
+  ],
   "states": [
     {
       "id": "s01-today",
@@ -13,7 +21,10 @@
           "Start session",
           "Streak"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s02-library",
@@ -26,7 +37,10 @@
           "Search exercises",
           "Wall Angels"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s03-library-neck",
@@ -42,7 +56,10 @@
         "treeExcludes": [
           "Standing Hip Hinge"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s04-library-search",
@@ -57,7 +74,10 @@
         "treeExcludes": [
           "Neck Ladder"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s05-exercise",
@@ -70,7 +90,10 @@
           "Start this exercise",
           "Shoulders"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s06-session-1",
@@ -82,7 +105,10 @@
         "treeIncludes": [
           "Step 1 of 3"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s07-session-2",
@@ -94,7 +120,10 @@
         "treeIncludes": [
           "Step 2 of 3"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s08-session-3",
@@ -106,7 +135,10 @@
         "treeIncludes": [
           "Step 3 of 3"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s09-session-rating",
@@ -118,7 +150,10 @@
         "treeIncludes": [
           "Finish session"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s10-progress",
@@ -132,7 +167,10 @@
           "Achievements",
           "streak"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s11-settings",
@@ -146,7 +184,10 @@
           "Reminders",
           "Notifications"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s12-profile",
@@ -159,7 +200,10 @@
           "Measurement units",
           "Centimeters"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s13-profile-inches",
@@ -173,7 +217,10 @@
           "Measurement units",
           "Inches"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s14-reminders-on",
@@ -186,7 +233,10 @@
           "Session reminders",
           "Reminder time"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s15-reminders-off",
@@ -200,7 +250,10 @@
           "Session reminders",
           "Reminder time"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s16-reminders-return",
@@ -220,7 +273,10 @@
           "Session reminders",
           "Reminder time"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s17-notifications",
@@ -234,7 +290,10 @@
           "Weekly summary",
           "Posture tips"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s18-notifications-toggled",
@@ -247,7 +306,10 @@
         "treeIncludes": [
           "Weekly summary"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s19-subscription",
@@ -259,7 +321,10 @@
         "treeIncludes": [
           "Managed through the App Store"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     },
     {
       "id": "s20-about",
@@ -272,7 +337,10 @@
           "2.4.1",
           "Terms of service"
         ]
-      }
+      },
+      "sources": [
+        "index.html"
+      ]
     }
   ],
   "transitions": [
