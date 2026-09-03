@@ -6,7 +6,8 @@
     "index.html"
   ],
   "sharedSources": [
-    "state-contract.json"
+    ".greenroom/**",
+    ".github/**"
   ],
   "states": [
     {
