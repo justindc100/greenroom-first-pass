@@ -20,4 +20,5 @@ jobs:
         for i in $(seq 1 30); do curl -sf http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
       target-url: http://127.0.0.1:4173/
       artifact-path: .
+      source-upload-allowed: "true"
       goal: Start a session from Today, complete every step, rate it, and confirm it appears in Progress history.
