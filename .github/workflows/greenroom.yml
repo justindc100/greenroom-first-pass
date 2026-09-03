@@ -16,8 +16,10 @@ jobs:
       platform: web
       app-id: first-pass
       prepare: |
-        npx --yes serve@14 -l 4173 -s . > serve.log 2>&1 &
-        for i in $(seq 1 30); do curl -sf http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+        npm install --no-save --no-audit --no-fund serve@14 > serve-install.log 2>&1
+        nohup npx --no-install serve -l 4173 -s . > serve.log 2>&1 &
+        for i in $(seq 1 60); do curl -sf http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+        curl -sf http://127.0.0.1:4173/ >/dev/null || { echo "preview never answered on 4173"; cat serve-install.log serve.log; exit 1; }
       target-url: http://127.0.0.1:4173/
       artifact-path: .
       source-upload-allowed: "true"
