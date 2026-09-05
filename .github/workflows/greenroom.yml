@@ -11,7 +11,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: justindc100/greenroom-action/.github/workflows/pass.yml@9c2c592f0c3cd8b4bbb3cdc9e95c9451bf2e8505
+    uses: justindc100/greenroom-action/.github/workflows/pass.yml@9004c8b09ee745c6a37fcfe74480fec0d47fe11c
     with:
       platform: web
       app-id: first-pass
