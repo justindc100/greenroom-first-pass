@@ -1,11 +1,12 @@
 {
   "schemaVersion": "1.0",
-  "sourceSha": "cdd6134c84fa29cdb47cf5e509a1c74f6772eafa",
-  "runnerSha": "c5fa4073bff66f06512f969f31cc7ec6c3a04de3",
+  "sourceSha": "79943eba03e8853dadca0a00ce2030135cfc62f8",
+  "runnerSha": "e54ac7eac73005735fc2b78a448b3d4c7e5d8e9a",
+  "baseBranch": "codex/release-canary-base-e54ac7eac730",
   "requiredPlatforms": [
     "web",
     "ios"
   ],
-  "createdAt": "2026-09-05T17:40:41.767Z",
+  "createdAt": "2026-09-05T18:18:34.441Z",
   "execution": "not-started"
 }

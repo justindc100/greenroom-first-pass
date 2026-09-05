@@ -107,7 +107,9 @@ const S = {
   filter: "All",
   profileName: "Alex",
 };
-function daysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
+// Evaluation pairs may freeze their calendar through the hidden scenario
+// seed so exact count/percentage labels remain reproducible across dates.
+function daysAgo(n) { const d = window.__GREENROOM_SCENARIO__?.now ? new Date(window.__GREENROOM_SCENARIO__.now) : new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
 const streak = () => (FAULTS.has("deep-streak-math") ? 5 : 2);
 const fmtLen = (min) => {
   // deep-units: detail pages ignore the units setting and mix in inches
@@ -146,7 +148,7 @@ const weekSessionsCount = () => {
 };
 // deep-achievement-pct: the displayed percentage is stored independently of
 // the count it is supposed to describe (lib-138).
-const monthlyGoal = () => { const done = 5, total = 10; return { done, total, pct: FAULTS.has("deep-achievement-pct") ? 44 : Math.round((done / total) * 100) }; };
+const monthlyGoal = () => { const month = daysAgo(0).slice(0, 7), done = S.history.filter(h => h.d.startsWith(month) && h.d <= daysAgo(0)).length, total = 10; return { done, total, pct: FAULTS.has("deep-achievement-pct") ? 44 : Math.round((done / total) * 100) }; };
 
 // --- Identity / role session -------------------------------------------
 // SESSION is the live, in-memory source of truth for who is signed in.

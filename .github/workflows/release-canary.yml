@@ -1,7 +1,7 @@
 name: Greenroom release canary
 on:
   pull_request:
-    branches: [codex/release-canary-base]
+    branches: [codex/release-canary-base-e54ac7eac730]
     types: [opened]
 permissions:
   contents: read
@@ -14,7 +14,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: justindc100/greenroom-action/.github/workflows/pass.yml@c5fa4073bff66f06512f969f31cc7ec6c3a04de3
+    uses: justindc100/greenroom-action/.github/workflows/pass.yml@e54ac7eac73005735fc2b78a448b3d4c7e5d8e9a
     with:
       app-id: release-canary-web
       platform: web
@@ -35,7 +35,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: justindc100/greenroom-action/.github/workflows/pass.yml@c5fa4073bff66f06512f969f31cc7ec6c3a04de3
+    uses: justindc100/greenroom-action/.github/workflows/pass.yml@e54ac7eac73005735fc2b78a448b3d4c7e5d8e9a
     with:
       app-id: release-canary-ios
       platform: ios
