@@ -1,3 +1,3 @@
-# greenroom-first-pass
+# Greenroom release canaries
 
-A throwaway static app (the PostureMaxx web fixture) used to run the first real Greenroom release pass through GitHub Actions OIDC, the control plane, private evidence storage, and a GitHub Check. Nothing here is a product.
+Disposable Greenroom-owned web and native iOS fixtures. Open exactly one new PR to `codex/release-canary-base` after reviewing spend and the candidate runner revision. Both platforms must pass independent verification, fresh screenshot coverage and Check delivery. Reopening, updating or merging a PR does not automatically rerun paid tests. Source upload is disabled. Do not install customer credentials or connect production backends.

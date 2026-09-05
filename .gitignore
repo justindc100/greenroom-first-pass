@@ -1,3 +1,2 @@
-node_modules/
-serve.log
-.DS_Store
+ios/build/
+ios/*.xcodeproj/

@@ -1,0 +1,71 @@
+name: Greenroom release canary
+on:
+  pull_request:
+    branches: [codex/release-canary-base]
+    types: [opened]
+permissions:
+  contents: read
+concurrency:
+  group: greenroom-release-canary
+  cancel-in-progress: false
+jobs:
+  web:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'justindc100'
+    permissions:
+      contents: read
+      id-token: write
+    uses: justindc100/greenroom-action/.github/workflows/pass.yml@c5fa4073bff66f06512f969f31cc7ec6c3a04de3
+    with:
+      app-id: release-canary-web
+      platform: web
+      prepare: |
+        nohup python3 -m http.server 4173 --bind 127.0.0.1 --directory web > /tmp/greenroom-web.log 2>&1 &
+        for i in $(seq 1 30); do curl -sf http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+        curl -sf http://127.0.0.1:4173/ >/dev/null
+      target-url: http://127.0.0.1:4173/
+      artifact-path: web
+      environment-manifest: .greenroom/web-environment.json
+      state-contract: .greenroom/web-contract.json
+      goal: >-
+        Open Progress and record its existing total session count and newest history row. Return to Today, press Start session for Neck Ladder, and complete all three steps with Next. At How did it feel?, choose 4 star rating, then press Finish session. Verify Progress has exactly one more session than the recorded count and a new first history row for Neck Ladder with today's date, 3 min, and exactly four stars. Navigate to Today and back to Progress and confirm the new row and incremented count remain. Do not finish after merely reaching Progress or the unrated prompt: the observed before/after change and selected rating are required. If the goal cannot be established, report blocked with the missing evidence.
+      release-canary: "true"
+      fail-on-infra-error: "true"
+  ios:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'justindc100'
+    permissions:
+      contents: read
+      id-token: write
+    uses: justindc100/greenroom-action/.github/workflows/pass.yml@c5fa4073bff66f06512f969f31cc7ec6c3a04de3
+    with:
+      app-id: release-canary-ios
+      platform: ios
+      runs-on: macos-26
+      prepare: |
+        command -v xcodegen >/dev/null || brew install xcodegen
+        node scripts/prepare-ios-canary.mjs ios
+      artifact-path: ios/build/Build/Products/Debug-iphonesimulator/GreenroomNativeFixture.app
+      app: io.greenroom.fixture
+      device: Greenroom CI Canary
+      environment-manifest: .greenroom/ios-environment.json
+      state-contract: .greenroom/ios-contract.json
+      goal: Verify a newly completed four-star session, persisted reminder and unit settings, and native Library search and detail navigation against each checkpoint goal.
+      release-canary: "true"
+      fail-on-infra-error: "true"
+  release-gate:
+    if: always()
+    needs: [web, ios]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      WEB_JOB: ${{ needs.web.result }}
+      IOS_JOB: ${{ needs.ios.result }}
+      WEB_GATE: ${{ needs.web.outputs.release-gate }}
+      IOS_GATE: ${{ needs.ios.outputs.release-gate }}
+    steps:
+      - name: Require verified web and iOS outcomes
+        shell: bash
+        run: |
+          test "$WEB_JOB" = success
+          test "$IOS_JOB" = success
+          test "$WEB_GATE" = passed
+          test "$IOS_GATE" = passed

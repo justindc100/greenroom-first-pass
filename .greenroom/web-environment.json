@@ -4,8 +4,10 @@
   "isolated": true,
   "resetStrategy": "ephemeral_deployment",
   "networkControl": "playwright",
-  "allowedHosts": ["127.0.0.1"],
+  "allowedHosts": [
+    "127.0.0.1"
+  ],
   "productionHosts": [],
   "sandboxPurchases": false,
-  "notes": "Throwaway first-pass repository: a self-contained static app served inside the CI job. Nothing outside the job is reachable."
+  "notes": "Greenroom-owned static fixture served only inside the CI job."
 }

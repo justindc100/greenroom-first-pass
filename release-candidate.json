@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0",
+  "sourceSha": "cdd6134c84fa29cdb47cf5e509a1c74f6772eafa",
+  "runnerSha": "c5fa4073bff66f06512f969f31cc7ec6c3a04de3",
+  "requiredPlatforms": [
+    "web",
+    "ios"
+  ],
+  "createdAt": "2026-09-05T17:40:41.767Z",
+  "execution": "not-started"
+}
