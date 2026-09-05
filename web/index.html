@@ -15,10 +15,12 @@
   button { display: block; width: 100%; padding: 14px; margin-top: 10px; border-radius: 12px; border: none; font-family: Barlow; font-size: 15px; font-weight: 600; background: #C8FF00; color: #0B0B0B; cursor: pointer; }
   button.ghost { background: #1C1C1A; color: #F5F5F4; }
   .card { background: #141412; border: 1px solid #232320; border-radius: 14px; padding: 14px; margin-top: 10px; }
-  .row { display: flex; justify-content: space-between; align-items: center; padding: 12px 2px; border-bottom: 1px solid #1C1C1A; font-size: 14.5px; cursor: pointer; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 12px 2px; border-bottom: 1px solid #1C1C1A; font-size: 14.5px; }
+  .row[onclick] { cursor: pointer; }
   .row .sub { color: #8A8A84; font-size: 12.5px; }
-  .chip { display: inline-block; background: #1C1C1A; border-radius: 99px; padding: 6px 13px; font-size: 12.5px; margin: 4px 6px 0 0; cursor: pointer; }
+  .chip { display: inline-block; background: #1C1C1A; color: #F5F5F4; border-radius: 99px; padding: 6px 13px; font-size: 12.5px; margin: 4px 6px 0 0; cursor: pointer; }
   .chip.sel { background: #C8FF00; color: #0B0B0B; }
+  [aria-label="Session rating"] button { width: 44px; min-height: 44px; padding: 6px; font-size: 15px; }
   input[type=text], input[type=search], select { width: 100%; padding: 11px; margin-top: 6px; border-radius: 9px; border: 1px solid #2E2E2A; background: #141412; color: #F5F5F4; font-size: 14px; }
   .toggle { width: 46px; height: 26px; border-radius: 99px; background: #2E2E2A; position: relative; cursor: pointer; flex-shrink: 0; }
   .toggle.on { background: #C8FF00; }
@@ -106,7 +108,9 @@ const S = {
   filter: "All",
   profileName: "Alex",
 };
-function daysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
+// Evaluation pairs may freeze their calendar through the hidden scenario
+// seed so exact count/percentage labels remain reproducible across dates.
+function daysAgo(n) { const d = window.__GREENROOM_SCENARIO__?.now ? new Date(window.__GREENROOM_SCENARIO__.now) : new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
 const streak = () => (FAULTS.has("deep-streak-math") ? 5 : 2);
 const fmtLen = (min) => {
   // deep-units: detail pages ignore the units setting and mix in inches
@@ -145,7 +149,7 @@ const weekSessionsCount = () => {
 };
 // deep-achievement-pct: the displayed percentage is stored independently of
 // the count it is supposed to describe (lib-138).
-const monthlyGoal = () => { const done = 5, total = 10; return { done, total, pct: FAULTS.has("deep-achievement-pct") ? 44 : Math.round((done / total) * 100) }; };
+const monthlyGoal = () => { const month = daysAgo(0).slice(0, 7), done = S.history.filter(h => h.d.startsWith(month) && h.d <= daysAgo(0)).length, total = 10; return { done, total, pct: FAULTS.has("deep-achievement-pct") ? 44 : Math.round((done / total) * 100) }; };
 
 // --- Identity / role session -------------------------------------------
 // SESSION is the live, in-memory source of truth for who is signed in.
