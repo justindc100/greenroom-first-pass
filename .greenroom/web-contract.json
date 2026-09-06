@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0",
+  "fixture": "first-pass-session-journey",
+  "entryState": "session-saved",
+  "sharedSources": [
+    ".github/**",
+    ".greenroom/**",
+    "web/**",
+    "ios/**"
+  ],
+  "states": [
+    {
+      "id": "session-saved",
+      "screen": "Saved session journey",
+      "goal": "Open Progress and record its existing total session count and newest history row. Return to Today, press Start session for Neck Ladder, and complete all three steps with Next. At How did it feel?, choose 4 star rating, then press Finish session. Verify Progress has exactly one more session than the recorded count and a new first history row for Neck Ladder with today's date, 3 min, and exactly four stars. Navigate to Today and back to Progress and confirm the new row and incremented count remain. Do not finish after merely reaching Progress or the unrated prompt: the observed before/after change and selected rating are required. If the goal cannot be established, report blocked with the missing evidence.",
+      "identity": {},
+      "sources": [
+        "web/**"
+      ]
+    }
+  ],
+  "transitions": []
+}
