@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1.0",
+  "sourceSha": "5d2341b06ebdcd7d11ca57cb52b57ae3e610a081",
+  "runnerSha": "3b2754eafa6ed5f4d122a0bb3ea7dee7005f65b8",
+  "baseBranch": "codex/release-canary-base-3b2754eafa6e-5d2341b06ebd",
+  "requiredPlatforms": [
+    "web",
+    "ios"
+  ],
+  "createdAt": "2026-09-09T23:20:42.839Z",
+  "execution": "not-started"
+}
