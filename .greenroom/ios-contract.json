@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0",
+  "entryState": "session-saved",
+  "sharedSources": [
+    ".github/**",
+    ".greenroom/**",
+    "scripts/**",
+    "web/**",
+    "ios/**"
+  ],
+  "states": [
+    {
+      "id": "session-saved",
+      "screen": "Completed native session",
+      "goal": "Open Progress and record the existing session count and Latest session rating. Return to Today and start Neck Ladder. Complete all three steps with Next. Choose 4 star rating and press Finish session. Verify Progress has exactly one additional session and Latest session now shows exactly four stars. Navigate to Today and back to Progress to confirm both values remain. Existing seeded rows are not proof of a new session.",
+      "identity": {},
+      "sources": [
+        "ios/**"
+      ]
+    },
+    {
+      "id": "settings-persisted",
+      "screen": "Saved native settings",
+      "goal": "Open Settings, then Reminders. Turn Session reminders off if it is on. Navigate to Today, then return to Settings and Reminders. Verify the switch is still off. Return to Settings, open Profile, change Measurement units to Inches, navigate to Today, and return to Profile. Verify Inches remains selected. Merely opening these screens does not satisfy the goal.",
+      "identity": {},
+      "sources": [
+        "ios/**"
+      ]
+    },
+    {
+      "id": "search-result",
+      "screen": "Native search and detail",
+      "goal": "Open Library with the All category selected. Search for Chin using Search exercises. Verify Chin Tucks is returned, open it, and verify its detail shows Chin Tucks, 2 min and Neck. Return to Library and verify search navigation still works. Use the native search field and visible navigation controls.",
+      "identity": {},
+      "sources": [
+        "ios/**"
+      ]
+    }
+  ],
+  "transitions": []
+}

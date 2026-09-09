@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "classification": "test",
+  "isolated": true,
+  "resetStrategy": "ephemeral_deployment",
+  "networkControl": "playwright",
+  "allowedHosts": [
+    "127.0.0.1"
+  ],
+  "productionHosts": [],
+  "sandboxPurchases": false,
+  "notes": "Greenroom-owned static fixture served only inside the CI job.",
+  "auth": {
+    "mechanism": "signed_out"
+  }
+}
