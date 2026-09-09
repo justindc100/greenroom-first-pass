@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0",
+  "classification": "test",
+  "isolated": true,
+  "resetStrategy": "fresh_install",
+  "networkControl": "sandboxed_backend",
+  "allowedHosts": [
+    "127.0.0.1"
+  ],
+  "productionHosts": [],
+  "sandboxPurchases": false,
+  "notes": "Greenroom-owned SwiftUI fixture has no backend, URLSession, web view or external service. Fresh CI simulator; native network activity is not proxy-enforced."
+}
