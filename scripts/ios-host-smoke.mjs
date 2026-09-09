@@ -9,6 +9,18 @@
 //   node scripts/ios-host-smoke.mjs <fixture-dir> --runner-cli <agent-device.mjs>
 //       [--rounds 10] [--report <path>] [--app io.greenroom.fixture]
 //       [--udid <udid>] [--label <text>]
+//       [--driver raw|harness --runner-bundle <dist/index.js>]
+//
+// `--driver harness` (0.3.17, GR-12) drives the rounds through the runner
+// bundle's own iOS adapter instead of raw agent-device calls
+// (`node <dist/index.js> ios-smoke`, packages/runner/lib/ios-smoke.js): the
+// adapter's open with its post-open settle gate, its observation and
+// screenshot paths with the slow-capture backoff, its coordinate tap, and
+// the bounded RUNNER_BUSY recovery around each, under the run loop's own
+// deadlines. Each round is then observe · screenshot · tap · screenshot
+// (the host-side simctl capture is a raw-driver operation only). The report
+// keeps the same host samples, prepare split and session-log scan, plus the
+// settle-gate result and the recovery counts.
 //
 // Without --udid it runs scripts/prepare-ios-canary.mjs first (build, fresh
 // "Greenroom CI Canary" simulator, bootstatus, install, `prepare ios-runner`:
@@ -42,6 +54,10 @@ const app = option("--app", "io.greenroom.fixture");
 const report = path.resolve(option("--report", path.join(fixture, "build/ios-host-smoke.json")));
 const label = option("--label", "");
 const prepareScript = path.resolve(option("--prepare-script", path.join(path.dirname(fileURLToPath(import.meta.url)), "prepare-ios-canary.mjs")));
+const driver = option("--driver", "raw");
+const runnerBundle = option("--runner-bundle") ? path.resolve(option("--runner-bundle")) : null;
+if (!["raw", "harness"].includes(driver)) throw new Error("--driver must be raw or harness");
+if (driver === "harness" && (!runnerBundle || !fs.existsSync(runnerBundle))) throw new Error("--driver harness needs --runner-bundle <dist/index.js> (the runner bundle whose ios-smoke command drives the rounds)");
 if (!runnerCli || !fs.existsSync(runnerCli)) throw new Error("--runner-cli must name an agent-device CLI (the runner bundle's dist/node_modules/agent-device/bin/agent-device.mjs)");
 if (!Number.isInteger(rounds) || rounds < 1 || rounds > 100) throw new Error("--rounds must be an integer from 1 to 100");
 
@@ -198,11 +214,11 @@ async function main() {
   const shots = path.join(fixture, "build/smoke-screenshots"); fs.mkdirSync(shots, { recursive: true });
   const cliVersion = (await run(process.execPath, [runnerCli, "--version"], { timeout: 30000 })).stdout.trim();
   const result = {
-    schemaVersion: "1.0", kind: "ios-host-smoke", label, startedAt: startedAt.toISOString(), finishedAt: null,
+    schemaVersion: "1.1", kind: "ios-host-smoke", driver, runnerBundle, label, startedAt: startedAt.toISOString(), finishedAt: null,
     actionsRunId: process.env.GITHUB_RUN_ID ?? null, actionsRunAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null, runnerName: process.env.RUNNER_NAME ?? null,
     host: { platform: `${os.type()} ${os.release()}`, arch: os.arch(), node: process.version, agentDevice: cliVersion, stateDir },
     fixture, app, rounds, slowThresholdMs: SLOW_MS, operationTimeoutMs: OPERATION_TIMEOUT_MS,
-    before: null, preparation: null, open: null, targets: null, operations: [], perRound: [], after: null, xcodebuild: {}, sessionLogs: null, summary: null, error: null,
+    before: null, preparation: null, open: null, settle: null, adapter: null, recovery: null, targets: null, operations: [], perRound: [], events: [], after: null, xcodebuild: {}, sessionLogs: null, summary: null, error: null,
   };
   const save = () => { result.finishedAt = new Date().toISOString(); fs.writeFileSync(report, JSON.stringify(result, null, 2) + "\n"); };
   let exitCode = 0;
@@ -227,35 +243,55 @@ async function main() {
       return entry;
     };
 
-    const open = await ad(["open", app, "--platform", "ios", "--udid", udid, "--relaunch"], { timeout: OPEN_TIMEOUT_MS });
-    const openEntry = record(0, "open", open);
-    if (!openEntry.ok) throw new Error(`open failed: ${openEntry.error.code}: ${openEntry.error.message}`);
-    result.open = { ms: openEntry.ms };
-    const first = await ad(["snapshot", "-i"]);
-    const firstEntry = record(0, "snapshot", first);
-    if (!firstEntry.ok) throw new Error(`first snapshot failed: ${firstEntry.error.code}: ${firstEntry.error.message}`);
-    result.targets = tabTargets(first.stdout);
-    log(`Tab targets: Today (${result.targets.targets.Today.x},${result.targets.targets.Today.y}) Progress (${result.targets.targets.Progress.x},${result.targets.targets.Progress.y})${result.targets.targets.Today.fromSnapshot ? "" : " [fallback geometry]"}; ${result.targets.nodeCount} interactive nodes.`);
-    result.xcodebuild.beforeRounds = await xcodebuildPids();
-
-    for (let round = 1; round <= rounds; round++) {
-      const target = result.targets.targets[round % 2 ? "Progress" : "Today"];
-      const roundStarted = Date.now();
-      const entries = [];
-      entries.push(record(round, "snapshot", await ad(["snapshot", "-i"])));
-      entries.push(record(round, "simctl-screenshot", await run("xcrun", ["simctl", "io", udid, "screenshot", path.join(shots, `round-${round}-simctl.png`)], { env })));
-      entries.push(record(round, "tap", await ad(["click", String(target.x), String(target.y), "--settle"]), { target: { x: target.x, y: target.y, label: round % 2 ? "Progress" : "Today" } }));
-      entries.push(record(round, "agent-device-screenshot", await ad(["screenshot", path.join(shots, `round-${round}-agent-device.png`)])));
-      result.perRound.push({ round, ms: Date.now() - roundStarted, failed: entries.filter((entry) => !entry.ok).length, slow: entries.filter((entry) => entry.ms > SLOW_MS).length, xcodebuildPids: await xcodebuildPids() });
+    if (driver === "harness") {
+      // The bundle's ios-smoke command owns open, settle, rounds, close and
+      // the xcodebuild samples; its report is folded in here. Its exit code
+      // is non-zero only for a tool error (open failed, or an operation
+      // failed after the recovery), never for slowness.
+      const harnessReport = path.join(outDir, "harness-report.json");
+      const harness = await run(process.execPath, [runnerBundle, "ios-smoke", "--app", app, "--udid", udid, "--rounds", String(rounds), "--report", harnessReport, "--screenshots", shots, "--label", label], { env, timeout: 3600000, tee: true });
+      if (!fs.existsSync(harnessReport)) throw new Error(`the bundle's ios-smoke wrote no report (${harness.timedOut ? "killed" : `exit ${harness.code}`}): ${harness.stderr.trim().split("\n").slice(-5).join(" | ")}`);
+      const folded = JSON.parse(fs.readFileSync(harnessReport, "utf8"));
+      result.open = folded.open; result.settle = folded.settle; result.adapter = folded.adapter; result.recovery = folded.recovery; result.targets = folded.targets;
+      result.operations = folded.operations; result.perRound = folded.perRound; result.events = folded.events; result.xcodebuild = folded.xcodebuild ?? {};
+      if (folded.abortedAfterRound) result.abortedAfterRound = folded.abortedAfterRound;
+      if (folded.error) result.harnessError = folded.error;
+      for (const name of ["round-1-before.png", "round-1-after.png"]) if (fs.existsSync(path.join(shots, name))) fs.copyFileSync(path.join(shots, name), path.join(outDir, name));
       save();
-      if (streak >= ABORT_AFTER_FAILED_OPERATIONS) { result.abortedAfterRound = round; log(`Aborting after round ${round}: ${streak} consecutive failed operations (the runner is gone; the remaining rounds would only measure restarts).`); break; }
+      if (folded.error) throw new Error(`harness smoke: ${folded.error}`);
+    } else {
+      const open = await ad(["open", app, "--platform", "ios", "--udid", udid, "--relaunch"], { timeout: OPEN_TIMEOUT_MS });
+      const openEntry = record(0, "open", open);
+      if (!openEntry.ok) throw new Error(`open failed: ${openEntry.error.code}: ${openEntry.error.message}`);
+      result.open = { ms: openEntry.ms };
+      const first = await ad(["snapshot", "-i"]);
+      const firstEntry = record(0, "snapshot", first);
+      if (!firstEntry.ok) throw new Error(`first snapshot failed: ${firstEntry.error.code}: ${firstEntry.error.message}`);
+      result.targets = tabTargets(first.stdout);
+      log(`Tab targets: Today (${result.targets.targets.Today.x},${result.targets.targets.Today.y}) Progress (${result.targets.targets.Progress.x},${result.targets.targets.Progress.y})${result.targets.targets.Today.fromSnapshot ? "" : " [fallback geometry]"}; ${result.targets.nodeCount} interactive nodes.`);
+      result.xcodebuild.beforeRounds = await xcodebuildPids();
+
+      for (let round = 1; round <= rounds; round++) {
+        const target = result.targets.targets[round % 2 ? "Progress" : "Today"];
+        const roundStarted = Date.now();
+        const entries = [];
+        entries.push(record(round, "snapshot", await ad(["snapshot", "-i"])));
+        entries.push(record(round, "simctl-screenshot", await run("xcrun", ["simctl", "io", udid, "screenshot", path.join(shots, `round-${round}-simctl.png`)], { env })));
+        entries.push(record(round, "tap", await ad(["click", String(target.x), String(target.y), "--settle"]), { target: { x: target.x, y: target.y, label: round % 2 ? "Progress" : "Today" } }));
+        entries.push(record(round, "agent-device-screenshot", await ad(["screenshot", path.join(shots, `round-${round}-agent-device.png`)])));
+        result.perRound.push({ round, ms: Date.now() - roundStarted, failed: entries.filter((entry) => !entry.ok).length, slow: entries.filter((entry) => entry.ms > SLOW_MS).length, xcodebuildPids: await xcodebuildPids() });
+        save();
+        if (streak >= ABORT_AFTER_FAILED_OPERATIONS) { result.abortedAfterRound = round; log(`Aborting after round ${round}: ${streak} consecutive failed operations (the runner is gone; the remaining rounds would only measure restarts).`); break; }
+      }
+      for (const name of ["round-1-simctl.png", "round-1-agent-device.png"]) if (fs.existsSync(path.join(shots, name))) fs.copyFileSync(path.join(shots, name), path.join(outDir, name));
     }
-    for (const name of ["round-1-simctl.png", "round-1-agent-device.png"]) if (fs.existsSync(path.join(shots, name))) fs.copyFileSync(path.join(shots, name), path.join(outDir, name));
-    result.xcodebuild.afterRounds = await xcodebuildPids();
-    result.after = await hostSample("after");
-    const close = await ad(["close"], { timeout: 60000 });
-    record(0, "close", close);
-    result.xcodebuild.afterClose = await xcodebuildPids();
+    if (driver === "raw") {
+      result.xcodebuild.afterRounds = await xcodebuildPids();
+      result.after = await hostSample("after");
+      const close = await ad(["close"], { timeout: 60000 });
+      record(0, "close", close);
+      result.xcodebuild.afterClose = await xcodebuildPids();
+    } else result.after = await hostSample("after");
     result.sessionLogs = scanSessionLogs(udid);
   } catch (error) {
     result.error = String(error.message ?? error);
@@ -265,13 +301,17 @@ async function main() {
   if (!result.after) result.after = await hostSample("after").catch(() => null);
   const ops = result.operations.filter((entry) => entry.round > 0);
   const byOp = {};
-  for (const op of ["snapshot", "simctl-screenshot", "tap", "agent-device-screenshot"]) byOp[op] = { ...stats(ops.filter((entry) => entry.op === op && entry.ok).map((entry) => entry.ms)), failed: ops.filter((entry) => entry.op === op && !entry.ok).length };
+  const opNames = driver === "harness" ? ["observe", "screenshot", "tap", "screenshot-after"] : ["snapshot", "simctl-screenshot", "tap", "agent-device-screenshot"];
+  for (const op of opNames) byOp[op] = { ...stats(ops.filter((entry) => entry.op === op && entry.ok).map((entry) => entry.ms)), failed: ops.filter((entry) => entry.op === op && !entry.ok).length };
   const all = ops.map((entry) => entry.ms);
   result.summary = {
     roundsCompleted: result.perRound.length, operations: ops.length, failedOperations: ops.filter((entry) => !entry.ok).length,
     overSlow: all.filter((ms) => ms > SLOW_MS).length, maxMs: all.length ? Math.max(...all) : null, medianMs: stats(all).median ?? null, byOp,
-    failureCodes: [...new Set(ops.filter((entry) => !entry.ok).map((entry) => entry.error.code))],
+    failureCodes: [...new Set(ops.filter((entry) => !entry.ok).map((entry) => entry.error?.code ?? "UNKNOWN"))],
     xcodebuildAliveAfterRounds: (result.xcodebuild.afterRounds ?? []).length > 0, xcodebuildAliveAfterClose: (result.xcodebuild.afterClose ?? []).length > 0,
+    settle: result.settle ? { settled: result.settle.settled, rounds: result.settle.rounds, elapsedMs: result.settle.elapsedMs } : null,
+    recovery: result.recovery,
+    loadAvg: { start: result.before?.loadAvg?.[0] ?? null, end: result.after?.loadAvg?.[0] ?? null },
   };
   if (ops.some((entry) => !entry.ok)) exitCode = 1;
   save();
@@ -280,7 +320,9 @@ async function main() {
     ...Object.entries(byOp).map(([op, s]) => `| ${op} | ${s.count} | ${s.median ?? "-"} | ${s.p90 ?? "-"} | ${s.max ?? "-"} | ${s.overSlow ?? 0} | ${s.failed} |`),
   ].join("\n");
   const prep = result.preparation ?? {};
-  const summaryText = `## iOS host smoke${label ? ` (${label})` : ""}\n\nHost ${result.before?.ncpu ?? "?"} cpu / ${result.before?.memsizeGiB ?? "?"} GiB; boot ${prep.bootSeconds ?? "?"} s, install ${prep.installSeconds ?? "?"} s, XCTest prepare ${prep.xctestPrepareSeconds ?? "?"} s, prepare step ${prep.wallSeconds ?? "?"} s; open ${result.open?.ms ?? "?"} ms; ${result.summary.roundsCompleted}/${rounds} rounds, ${result.summary.overSlow} operations over 5 s, max ${result.summary.maxMs ?? "?"} ms, ${result.summary.failedOperations} failed${result.summary.failureCodes.length ? ` (${result.summary.failureCodes.join(", ")})` : ""}; xcodebuild alive after rounds: ${result.summary.xcodebuildAliveAfterRounds}, after close: ${result.summary.xcodebuildAliveAfterClose}; log markers: ${result.sessionLogs ? Object.entries(result.sessionLogs.counts).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ") || "none" : "not scanned"}${result.error ? `\n\nTool error: ${result.error}` : ""}\n\n${table}\n`;
+  const settleText = result.settle ? `; settle gate ${result.settle.settled ? "settled" : "UNSETTLED"} after ${result.settle.rounds} probe(s) in ${result.settle.elapsedMs} ms` : "";
+  const recoveryText = result.recovery ? `; RUNNER_BUSY ${result.recovery.busy}, recovered by poll ${result.recovery.recoveredByPoll}, by re-attach ${result.recovery.recoveredByReattach}, failed closed ${result.recovery.failedClosed}, backoffs ${result.recovery.backoffs}` : "";
+  const summaryText = `## iOS host smoke${label ? ` (${label})` : ""} · driver ${driver}\n\nHost ${result.before?.ncpu ?? "?"} cpu / ${result.before?.memsizeGiB ?? "?"} GiB, load ${result.before?.loadAvg?.[0] ?? "?"} → ${result.after?.loadAvg?.[0] ?? "?"}; boot ${prep.bootSeconds ?? "?"} s, install ${prep.installSeconds ?? "?"} s, XCTest prepare ${prep.xctestPrepareSeconds ?? "?"} s, prepare step ${prep.wallSeconds ?? "?"} s; open ${result.open?.ms ?? "?"} ms${settleText}; ${result.summary.roundsCompleted}/${rounds} rounds, ${result.summary.overSlow} operations over 5 s, max ${result.summary.maxMs ?? "?"} ms, ${result.summary.failedOperations} failed${result.summary.failureCodes.length ? ` (${result.summary.failureCodes.join(", ")})` : ""}; xcodebuild alive after rounds: ${result.summary.xcodebuildAliveAfterRounds}, after close: ${result.summary.xcodebuildAliveAfterClose}${recoveryText}; log markers: ${result.sessionLogs ? Object.entries(result.sessionLogs.counts).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ") || "none" : "not scanned"}${result.error ? `\n\nTool error: ${result.error}` : ""}\n\n${table}\n`;
   console.log(summaryText);
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summaryText);
   log(`Report written to ${report}; exit ${exitCode}.`);

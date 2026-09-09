@@ -22,13 +22,21 @@ on:
         required: false
         default: "10"
       runner-sha:
-        description: justindc100/greenroom-action commit whose vendored agent-device CLI drives the simulator (stable 0.3.13 by default; read for its CLI only)
+        description: justindc100/greenroom-action commit whose vendored agent-device CLI drives the simulator (the untrusted 0.3.17 smoke publication 1773abf8 from greenroom@3ea14f4 by default; read for its bundle and CLI only, never trusted or pinned)
         required: false
-        default: 9c961aad5dd2ce8a9b4c19a498e816c8acd4044e
+        default: 1773abf88ac82107a7a4a89f6e33d5449c6216a2
       label:
         description: Free-text label recorded in the report
         required: false
         default: ""
+      driver:
+        description: raw (agent-device CLI calls, the 2026-09-09 baseline) or harness (the runner bundle's own iOS adapter, `ios-smoke`, with its settle gate and RUNNER_BUSY recovery)
+        required: false
+        default: harness
+      spotlight:
+        description: off (sudo mdutil -a -i off before the simulator boots) or on (leave the image's indexer running)
+        required: false
+        default: "off"
 permissions:
   contents: read
 concurrency:
@@ -43,9 +51,12 @@ jobs:
       # the inputs context is empty; a fetch of the runner repository must
       # never fall back to its mutable main.
       SMOKE_ROUNDS: ${{ inputs.rounds || '10' }}
-      SMOKE_RUNNER_SHA: ${{ inputs.runner-sha || '9c961aad5dd2ce8a9b4c19a498e816c8acd4044e' }}
+      SMOKE_RUNNER_SHA: ${{ inputs.runner-sha || '1773abf88ac82107a7a4a89f6e33d5449c6216a2' }}
       SMOKE_LABEL: ${{ inputs.label || github.event.head_commit.message || '' }}
+      SMOKE_DRIVER: ${{ inputs.driver || 'harness' }}
+      SMOKE_SPOTLIGHT: ${{ inputs.spotlight || 'off' }}
       SMOKE_CLI: .greenroom-action/dist/node_modules/agent-device/bin/agent-device.mjs
+      SMOKE_BUNDLE: .greenroom-action/dist/index.js
     steps:
       - name: Check out the fixture
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, Node 24
@@ -56,7 +67,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, Node 24
         with:
           repository: justindc100/greenroom-action
-          ref: ${{ inputs.runner-sha || '9c961aad5dd2ce8a9b4c19a498e816c8acd4044e' }}
+          ref: ${{ inputs.runner-sha || '1773abf88ac82107a7a4a89f6e33d5449c6216a2' }}
           path: .greenroom-action
           persist-credentials: false
 
@@ -81,16 +92,36 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY"
           command -v xcodegen >/dev/null || brew install xcodegen
 
+      # Spotlight indexing off before the simulator boots, the same step the
+      # pass workflow (pass.yml) runs on GitHub-hosted Macs: the three raw
+      # smokes of 2026-09-09 (34408902477, 34410772878, 34412523322) found the
+      # image's indexer (`mds`, `mds_stores`, four to six `mdworker_shared`
+      # at 9-29 % each) saturating the 3-vCPU host as the job started, load
+      # 85 to 212, and every run's first capture after open 6 to 15 s slow.
+      # A failure is a warning; the smoke still measures.
+      - name: Turn Spotlight indexing off on the hosted Mac
+        if: env.SMOKE_SPOTLIGHT == 'off'
+        shell: bash
+        run: |
+          set +e
+          if sudo mdutil -a -i off; then echo "Spotlight indexing off on every volume."; else echo "::warning::sudo mdutil -a -i off failed (exit $?); the host keeps indexing"; fi
+          sudo mdutil -a -s 2>/dev/null | head -20
+          { echo "### Spotlight"; echo '```'; sudo mdutil -a -s 2>/dev/null | head -20; pgrep -fl 'mds|mdworker' | head -20; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
       # Build, fresh simulator, install and XCTest preparation come from
-      # scripts/prepare-ios-canary.mjs inside the smoke script; then the rounds.
-      # A slow host does not fail this step; a tool error does.
+      # scripts/prepare-ios-canary.mjs inside the smoke script; then the rounds,
+      # through the bundle's own iOS adapter (`ios-smoke`, driver harness) or
+      # raw agent-device calls (driver raw). A slow host does not fail this
+      # step; a tool error does, and so does an adapter recovery that fails
+      # closed (an operation that stays failed after the poll and re-attach).
       - name: Run the host smoke
         id: smoke
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/ios-host-smoke"
-          node scripts/ios-host-smoke.mjs ios --runner-cli "$SMOKE_CLI" --rounds "$SMOKE_ROUNDS" --label "$SMOKE_LABEL" --report "$RUNNER_TEMP/ios-host-smoke/report.json"
+          node scripts/ios-host-smoke.mjs ios --runner-cli "$SMOKE_CLI" --driver "$SMOKE_DRIVER" --runner-bundle "$SMOKE_BUNDLE" --rounds "$SMOKE_ROUNDS" --label "$SMOKE_LABEL" --report "$RUNNER_TEMP/ios-host-smoke/report.json"
 
       # The same process inventory the pass's orphan sweep prints: an
       # xcodebuild still alive here is the runner retained for its idle stop.
