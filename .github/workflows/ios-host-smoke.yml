@@ -7,9 +7,14 @@
 # runner repository is fetched at a pinned commit only for the agent-device
 # CLI it vendors; nothing here trusts, publishes or pins a runner. Copy this
 # file with the fixture source and scripts into the fixture repository (see
-# docs/release-canaries.md for the packet conventions); dispatch by hand.
+# docs/release-canaries.md for the packet conventions) on its own branch.
+# GitHub resolves workflow_dispatch against the default branch only, so on a
+# disposable branch the dispatch is a push to that branch (an empty commit
+# will do; the inputs then take their defaults). Nothing else triggers it.
 name: Greenroom iOS host smoke
 on:
+  push:
+    branches: ["codex/ios-host-smoke*"]
   workflow_dispatch:
     inputs:
       rounds:
@@ -34,9 +39,12 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 50
     env:
-      SMOKE_ROUNDS: ${{ inputs.rounds }}
-      SMOKE_RUNNER_SHA: ${{ inputs.runner-sha }}
-      SMOKE_LABEL: ${{ inputs.label }}
+      # The workflow_dispatch defaults, repeated for the push trigger, where
+      # the inputs context is empty; a fetch of the runner repository must
+      # never fall back to its mutable main.
+      SMOKE_ROUNDS: ${{ inputs.rounds || '10' }}
+      SMOKE_RUNNER_SHA: ${{ inputs.runner-sha || '9c961aad5dd2ce8a9b4c19a498e816c8acd4044e' }}
+      SMOKE_LABEL: ${{ inputs.label || github.event.head_commit.message || '' }}
       SMOKE_CLI: .greenroom-action/dist/node_modules/agent-device/bin/agent-device.mjs
     steps:
       - name: Check out the fixture
@@ -48,7 +56,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, Node 24
         with:
           repository: justindc100/greenroom-action
-          ref: ${{ inputs.runner-sha }}
+          ref: ${{ inputs.runner-sha || '9c961aad5dd2ce8a9b4c19a498e816c8acd4044e' }}
           path: .greenroom-action
           persist-credentials: false
 
