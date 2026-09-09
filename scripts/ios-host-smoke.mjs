@@ -92,6 +92,10 @@ async function hostSample(phase) {
   const topHead = top.split("\n").slice(0, 12).join("\n");
   const loadMatch = /Load Avg: ([\d.]+), ([\d.]+), ([\d.]+)/.exec(top);
   const cpuMatch = /CPU usage: ([\d.]+)% user, ([\d.]+)% sys, ([\d.]+)% idle/.exec(top);
+  // Two 1 s samples: top's first sample reports no per-process CPU. The ten
+  // busiest processes say what is loading the host (a 3-vCPU hosted VM
+  // showed load 85 before the job's own work started on 2026-09-09).
+  const topProcesses = (await capture("top", ["-l", "2", "-s", "1", "-n", "10", "-o", "cpu", "-stats", "pid,cpu,mem,state,command"])).split(/\n(?=Processes:)/).at(-1)?.split("\n").filter((line) => /^\s*\d+\s/.test(line)).map((line) => line.trim()) ?? [];
   const vmStat = await capture("vm_stat", []);
   const pageSize = Number(/page size of (\d+) bytes/.exec(vmStat)?.[1] ?? 16384);
   const pages = (name) => Number(new RegExp(`${name}:\\s+(\\d+)`).exec(vmStat)?.[1] ?? 0);
@@ -105,7 +109,7 @@ async function hostSample(phase) {
     cpu: cpuMatch ? { user: Number(cpuMatch[1]), sys: Number(cpuMatch[2]), idle: Number(cpuMatch[3]) } : null,
     freeMiB: Math.round((pages("Pages free") + pages("Pages speculative")) * pageSize / 2 ** 20),
     swapouts: pages("Swapouts"),
-    topHead, vmStat,
+    topProcesses, topHead, vmStat,
   };
 }
 
