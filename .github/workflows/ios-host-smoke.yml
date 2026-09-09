@@ -1,0 +1,119 @@
+# No-model hosted iOS smoke for the disposable fixture repository
+# (justindc100/greenroom-first-pass): measures how often and how long the
+# macos-26 simulator's display-capture and accessibility paths stall, on the
+# 0.3.13 preparation path (no warm-up), with scripts/ios-host-smoke.mjs. It
+# calls no model, mints no Greenroom run, exchanges nothing with the control
+# plane and costs nothing beyond public-repository Actions minutes. The public
+# runner repository is fetched at a pinned commit only for the agent-device
+# CLI it vendors; nothing here trusts, publishes or pins a runner. Copy this
+# file with the fixture source and scripts into the fixture repository (see
+# docs/release-canaries.md for the packet conventions); dispatch by hand.
+name: Greenroom iOS host smoke
+on:
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: Rounds of snapshot / simctl screenshot / tab tap / agent-device screenshot
+        required: false
+        default: "10"
+      runner-sha:
+        description: justindc100/greenroom-action commit whose vendored agent-device CLI drives the simulator (stable 0.3.13 by default; read for its CLI only)
+        required: false
+        default: 9c961aad5dd2ce8a9b4c19a498e816c8acd4044e
+      label:
+        description: Free-text label recorded in the report
+        required: false
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: greenroom-ios-host-smoke
+  cancel-in-progress: false
+jobs:
+  smoke:
+    runs-on: macos-26
+    timeout-minutes: 50
+    env:
+      SMOKE_ROUNDS: ${{ inputs.rounds }}
+      SMOKE_RUNNER_SHA: ${{ inputs.runner-sha }}
+      SMOKE_LABEL: ${{ inputs.label }}
+      SMOKE_CLI: .greenroom-action/dist/node_modules/agent-device/bin/agent-device.mjs
+    steps:
+      - name: Check out the fixture
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, Node 24
+        with:
+          persist-credentials: false
+
+      - name: Fetch the runner repository for its vendored agent-device CLI
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, Node 24
+        with:
+          repository: justindc100/greenroom-action
+          ref: ${{ inputs.runner-sha }}
+          path: .greenroom-action
+          persist-credentials: false
+
+      - name: Verify the fetched revision and record host facts
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SMOKE_RUNNER_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git -C .greenroom-action rev-parse HEAD)" = "$SMOKE_RUNNER_SHA"
+          test -f "$SMOKE_CLI"
+          {
+            echo "### Host"
+            echo '```'
+            sw_vers
+            xcodebuild -version
+            echo "node $(node --version)"
+            echo "agent-device $(node "$SMOKE_CLI" --version)"
+            echo "hw.ncpu $(sysctl -n hw.ncpu)  hw.memsize $(sysctl -n hw.memsize)  hw.model $(sysctl -n hw.model)"
+            echo "runner ${RUNNER_NAME:-?}  image ${ImageOS:-?} ${ImageVersion:-?}"
+            xcrun simctl list runtimes | grep -i ios || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          command -v xcodegen >/dev/null || brew install xcodegen
+
+      # Build, fresh simulator, install and XCTest preparation come from
+      # scripts/prepare-ios-canary.mjs inside the smoke script; then the rounds.
+      # A slow host does not fail this step; a tool error does.
+      - name: Run the host smoke
+        id: smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ios-host-smoke"
+          node scripts/ios-host-smoke.mjs ios --runner-cli "$SMOKE_CLI" --rounds "$SMOKE_ROUNDS" --label "$SMOKE_LABEL" --report "$RUNNER_TEMP/ios-host-smoke/report.json"
+
+      # The same process inventory the pass's orphan sweep prints: an
+      # xcodebuild still alive here is the runner retained for its idle stop.
+      - name: Sweep processes and the simulator
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          echo "### Sweep" >> "$GITHUB_STEP_SUMMARY"
+          { echo '```'; pgrep -fl 'xcodebuild|agent-device|DTServiceHub|node' | grep -v Runner.Listener; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          node "$SMOKE_CLI" daemon stop --clean || true
+          pkill -x xcodebuild || true
+          udid=$(node -e 'try{console.log(require(process.argv[1]).udid)}catch{}' "$PWD/ios/build/simulator.json")
+          if [ -n "$udid" ]; then xcrun simctl shutdown "$udid" || true; xcrun simctl delete "$udid" || true; fi
+          cp ios/build/simulator.json "$RUNNER_TEMP/ios-host-smoke/" 2>/dev/null || true
+          exit 0
+
+      # Always: the report is the point of the run, and agent-device's own logs
+      # (runner.log, per-request logs, event stream, daemon log) hold the
+      # watchdog / RUNNER_BUSY / BUILD INTERRUPTED lines the report counts.
+      # They contain session names, the UDID and xcodebuild output; no secrets.
+      - name: Upload the smoke report and agent-device session logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7, Node 24
+        with:
+          name: greenroom-ios-host-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ios-host-smoke/
+            ~/.agent-device/sessions/sim-*/runner.log
+            ~/.agent-device/sessions/sim-*/requests/
+            ~/.agent-device/sessions/sim-*/events.ndjson
+            ~/.agent-device/daemon.log
+          if-no-files-found: warn
+          retention-days: 30
