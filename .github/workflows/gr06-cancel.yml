@@ -1,0 +1,36 @@
+# GR-06 rehearsal (cancel): the accepted 0.3.17 packet's web job, alone, with
+# customer defaults (release-canary and fail-on-infra-error both false), on the
+# stable runner 3b2754eafa6ed5f4d122a0bb3ea7dee7005f65b8. Opened PRs only; see
+# https://app.notion.com/p/3d31bbf896b8815cb0f8f383452719e2.
+name: Greenroom GR-06 rehearsal (cancel)
+on:
+  pull_request:
+    branches: [gr06/cancel-base]
+    types: [opened]
+permissions:
+  contents: read
+concurrency:
+  group: greenroom-gr06-cancel
+  cancel-in-progress: false
+jobs:
+  web:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'justindc100'
+    permissions:
+      contents: read
+      id-token: write
+    uses: justindc100/greenroom-action/.github/workflows/pass.yml@3b2754eafa6ed5f4d122a0bb3ea7dee7005f65b8
+    with:
+      app-id: release-canary-web
+      platform: web
+      prepare: |
+        nohup python3 -m http.server 4173 --bind 127.0.0.1 --directory web > /tmp/greenroom-web.log 2>&1 &
+        for i in $(seq 1 30); do curl -sf http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+        curl -sf http://127.0.0.1:4173/ >/dev/null
+      target-url: http://127.0.0.1:4173/
+      artifact-path: web
+      environment-manifest: .greenroom/web-environment.json
+      state-contract: .greenroom/web-contract.json
+      # The one web checkpoint's goal, verbatim from
+      # docs/canaries/web-session-journey/state-contract.json.
+      goal: >-
+        Open Progress and record its existing total session count and newest history row. Return to Today, press Start session for Neck Ladder, and complete all three steps with Next. At How did it feel?, choose 4 star rating, then press Finish session. Verify Progress has exactly one more session than the recorded count and a new first history row for Neck Ladder with today's date, 3 min, and exactly four stars. Navigate to Today and back to Progress and confirm the new row and incremented count remain. Do not finish after merely reaching Progress or the unrated prompt: the observed before/after change and selected rating are required. If the goal cannot be established, report blocked with the missing evidence.

@@ -1,3 +1,3 @@
-# Greenroom release canaries
+# GR-06 rehearsal base: cancel
 
-Disposable Greenroom-owned web and native iOS fixtures. Open exactly one new PR to codex/release-canary-base-3b2754eafa6e-5d2341b06ebd after reviewing spend and the candidate runner revision. Both platforms must pass independent verification, fresh screenshot coverage and Check delivery. Reopening, updating or merging a PR does not automatically rerun paid tests. Source upload is disabled. Do not install customer credentials or connect production backends.
+Disposable Greenroom-owned fixture branch for the GR-06 failure and evidence-access rehearsal (https://app.notion.com/p/3d31bbf896b8815cb0f8f383452719e2). Web job only, stable runner 0.3.17 (3b2754eafa6ed5f4d122a0bb3ea7dee7005f65b8). Open exactly one PR to this branch.
