@@ -7,9 +7,11 @@
   "allowedHosts": [
     "127.0.0.1"
   ],
-  "productionHosts": [],
+  "productionHosts": [
+    "127.0.0.1"
+  ],
   "sandboxPurchases": false,
-  "notes": "Greenroom-owned static fixture served only inside the CI job.",
+  "notes": "GR-06 rehearsal: invalid manifest, 127.0.0.1 is both allowed and production.",
   "auth": {
     "mechanism": "signed_out"
   }
